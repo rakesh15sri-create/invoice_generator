@@ -1,7 +1,10 @@
 import express, { Router } from 'express';
 import { Readable } from 'node:stream';
 import { ah } from './db.js';
-import { FOLDER, StorageError, signedUrl, uploadFile } from './imagekit.js';
+import { FOLDER, StorageError, signedUrl, storageEnabled, uploadFile } from './imagekit.js';
+
+// Vercel rejects request bodies over 4.5 MB before they reach the app.
+export const UPLOAD_LIMIT_MB = process.env.VERCEL ? 4 : 20;
 
 // Uploads arrive as the raw request body (content-type application/octet-stream) with the
 // original name and type in headers, so a .json attachment is never parsed as JSON.
@@ -17,6 +20,9 @@ const LOGO_MAX_MB = 1.5;
 
 // Logos are saved in invoices as "ik:<filePath>" and shown via /api/files/logo?path=...
 export const filesRouter = Router();
+
+// What the upload screens need to know before sending a file.
+filesRouter.get('/config', (req, res) => res.json({ enabled: storageEnabled(), maxUploadMb: UPLOAD_LIMIT_MB }));
 
 filesRouter.post('/logo', rawBody(LOGO_MAX_MB), ah(async (req, res) => {
   const { fileName, mime } = fileMeta(req);

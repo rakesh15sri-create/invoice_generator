@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, fileSrc, openStoredFile, upload } from '../api.js';
 import { FORM, getPath, money, num, totals } from '../data.js';
 import { TEMPLATE_GROUPS } from '../templates/index.js';
@@ -163,7 +163,9 @@ function ItemsEditor({ inv, setItems }) {
   );
 }
 
-const ATTACH_MAX_MB = 20;
+// Upload limit comes from the server (smaller on Vercel); fetched once per page load.
+let uploadConfig = null;
+const getUploadConfig = () => (uploadConfig ??= api('/files/config').catch(() => { uploadConfig = null; return { maxUploadMb: 4 }; }));
 const fmtSize = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 const fmtWhen = (d) => (d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 
@@ -171,9 +173,12 @@ const fmtWhen = (d) => (d ? new Date(d).toLocaleDateString('en-GB', { day: 'nume
 function Attachments({ invoiceId, files, setFiles }) {
   const [uploading, setUploading] = useState('');
   const [over, setOver] = useState(false);
+  const [maxMb, setMaxMb] = useState(null);
   const toast = useToast();
   const confirm = useConfirm();
   const { pdf, attachments = [] } = files || {};
+  useEffect(() => { getUploadConfig().then((c) => setMaxMb(c.maxUploadMb)); }, []);
+  const ATTACH_MAX_MB = maxMb ?? 4;
 
   const open = (f) => openStoredFile(invoiceId, f.id).catch((e) => toast(e.message, 'error'));
 

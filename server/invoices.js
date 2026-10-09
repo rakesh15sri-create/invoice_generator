@@ -2,12 +2,12 @@ import { Router } from 'express';
 import { isPaid, num, pad, totals } from '../src/data.js';
 import { requireRole } from './auth.js';
 import { ah, invoices, nextId, settings, users } from './db.js';
-import { fileMeta, rawBody } from './files.js';
+import { UPLOAD_LIMIT_MB, fileMeta, rawBody } from './files.js';
 import { deleteFile, signedUrl, uploadFile } from './imagekit.js';
 
-const ATTACH_MAX_MB = 20;
+const ATTACH_MAX_MB = UPLOAD_LIMIT_MB;
 const ATTACH_MAX_COUNT = 20;
-const PDF_MAX_MB = 20;
+const PDF_MAX_MB = UPLOAD_LIMIT_MB;
 
 // Stored file → what the browser sees (no ImageKit paths or ids beyond what's needed).
 const fileInfo = (f) => f && ({ id: f.fileId, name: f.name, size: f.size, type: f.mime, uploadedAt: f.uploadedAt, uploadedBy: f.uploadedBy });

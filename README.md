@@ -23,7 +23,16 @@ npm run create-admin -- email@example.com StrongPassword "Name"
 
 ## Hosting
 
-Use a host that runs an always-on Node server (Render, Railway, a VPS…).
+**Vercel** (configured in `vercel.json`): the pages are served by Vercel and the API runs as a
+serverless function from `api/index.js`.
+
+- Import the GitHub repo in Vercel; the build settings come from `vercel.json`.
+- Project → Settings → Environment Variables: add `MONGODB_URI`, `MONGODB_DB`,
+  `IMAGEKIT_PRIVATE_KEY`, `IMAGEKIT_URL_ENDPOINT`, `IMAGEKIT_FOLDER`, then redeploy.
+- MongoDB Atlas → Network Access: Vercel has no fixed IP, so allow `0.0.0.0/0` and use a strong database password.
+- Uploads are limited to 4 MB per file on Vercel.
+
+**Always-on Node server** (Render, Railway, a VPS…):
 
 - Build command: `npm install && npm run build`
 - Start command: `node server/index.js`
