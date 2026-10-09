@@ -1,0 +1,26 @@
+{
+  "name": "invoice-generator",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c blue,green \"npm:server\" \"vite\"",
+    "server": "node --disable-warning=ExperimentalWarning --watch server/index.js",
+    "create-admin": "node server/create-admin.js",
+    "migrate-sqlite": "node --disable-warning=ExperimentalWarning server/migrate-from-sqlite.js",
+    "build": "vite build",
+    "start": "node --disable-warning=ExperimentalWarning scripts/start.js"
+  },
+  "dependencies": {
+    "express": "^4.22.3",
+    "html2pdf.js": "^0.10.1",
+    "mongodb": "^7.7.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^10.0.5",
+    "vite": "^5.4.11"
+  }
+}

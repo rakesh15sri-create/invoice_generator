@@ -1,0 +1,28 @@
+# Dependencies (reinstalled with npm install)
+node_modules/
+
+# Build output (recreated with npm run build)
+dist/
+
+# Local data: old SQLite database and its backups — contains users and invoices
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Secrets: database password, ImageKit private key. Set these in the host's settings instead.
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+logs/
+
+# Editor & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
