@@ -15,7 +15,7 @@ import { MongoClient } from 'mongodb';
 //   counters  { _id: name, seq }
 // Withdrawal CRM (see server/crm/):
 //   withdrawals { _id, ref, clientId, clientName, accountNo, amount, currency, method, rmId, rmName, note,
-//                 requestedAt, status, department, statusSince, closedAt, history[], createdBy, ... }
+//                 requestedAt, status, department, statusSince, closedAt, history[], importRef?, createdBy, ... }
 //   clients     { _id, name, email, emailLower, phone, phoneKey, country, accountNo, rmId, rmName, notes,
 //                 source, importBatch, backfilled, ... }
 //   mails       { _id, ticket, clientId, clientName, clientEmail, subject, issueType, relatedIssues[], priority,
@@ -62,6 +62,7 @@ export async function connectDb() {
     withdrawals.createIndex({ accountNo: 1, status: 1 }),
     withdrawals.createIndex({ requestedAt: -1 }),
     withdrawals.createIndex({ clientId: 1 }),
+    withdrawals.createIndex({ importRef: 1 }, { sparse: true }),
     clients.createIndex({ name: 1 }),
     clients.createIndex({ importBatch: 1 }),
     mails.createIndex({ status: 1 }),

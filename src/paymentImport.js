@@ -2,10 +2,9 @@
 // (one payment per row; column names like "Merchant Defined Order Number", "Card Holder Email")
 // and keeps only what an invoice needs. Also accepts the report turned sideways (field names down
 // the first column, one payment per column) and the "12. Total: 3675" text from the gateway's e-mails.
-import { parseCsv } from './crm/csv.js';
 import { defaults, todayISO } from './data.js';
 import { INDUSTRY_BY_ID } from './templates/industries.js';
-import { readXlsx } from './xlsx.js';
+import { readSpreadsheet } from './xlsx.js';
 
 // Invoice field → report column names, best match first. Matching ignores case, a leading
 // "12." and the "#1" the gateway adds to card columns.
@@ -39,10 +38,7 @@ const clean = (v) => { const s = String(v ?? '').trim(); return EMPTY.has(s.toLo
 // ---------- file → records ({ normalized column name: value }) ----------
 
 export async function readPaymentFile(file) {
-  const name = file.name.toLowerCase();
-  if (name.endsWith('.xls')) throw new Error('Old .xls files can’t be read. Open the file in Excel and save it as .xlsx (or CSV), then choose it again.');
-  const rows = name.endsWith('.xlsx') ? await readXlsx(file) : parseCsv(await file.text());
-  return toRecords(rows.map((r) => r.map((c) => String(c ?? ''))));
+  return toRecords(await readSpreadsheet(file));
 }
 
 function toRecords(rows) {
