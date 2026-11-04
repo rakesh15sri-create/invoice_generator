@@ -20,7 +20,7 @@ export function ItemsTable({ inv, className = 'items' }) {
   return (
     <table className={className}>
       <thead>
-        <tr><th>Description</th><th className="r">Qty</th><th className="r">Unit price</th><th className="r">Amount</th></tr>
+        <tr><th>Services</th><th className="r">Qty</th><th className="r">Unit price</th><th className="r">Amount</th></tr>
       </thead>
       <tbody>
         {inv.items.map((it, i) => (

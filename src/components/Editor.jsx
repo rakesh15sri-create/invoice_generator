@@ -132,7 +132,7 @@ function ExtrasEditor({ extras, setExtras, template, onLoadSample }) {
 
 function ItemsEditor({ inv, setItems }) {
   const { items, template, currency } = inv;
-  const [c1, c2, c3] = INDUSTRY_BY_ID[template]?.cols || ['Description', 'Qty', 'Price'];
+  const [c1, c2, c3] = INDUSTRY_BY_ID[template]?.cols || ['Services', 'Qty', 'Price'];
   const update = (i, key, v) => setItems(items.map((it, j) => (j === i ? { ...it, [key]: v } : it)));
   const remove = (i) => {
     const next = items.filter((_, j) => j !== i);
