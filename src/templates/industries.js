@@ -8,7 +8,7 @@
 export const INDUSTRIES = [
   {
     id: 'webdev', name: 'Web Development', layout: 'band', accent: '#2563eb', title: 'Web Development Invoice',
-    cols: ['Deliverable / Milestone', 'Qty', 'Rate'], extrasTitle: 'Project Details',
+    cols: ['Services', 'Qty', 'Rate'], extrasTitle: 'Project Details',
     extras: [['Project', 'Corporate Website'], ['Website URL', 'www.example.com'], ['Tech Stack', 'React, Node.js'], ['Milestone', 'Phase 2 – Development'], ['Project Manager', 'PM Name']],
   },
   {
