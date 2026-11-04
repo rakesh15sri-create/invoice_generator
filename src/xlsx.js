@@ -2,6 +2,15 @@
 // files, unpacked here with the browser's built-in DecompressionStream, so no spreadsheet library
 // is needed. Date cells come back as "YYYY-MM-DD", "HH:MM:SS" or "YYYY-MM-DD HH:MM:SS".
 // Old binary .xls files aren't supported (save them as .xlsx or CSV).
+import { parseCsv } from './crm/csv.js';
+
+// .xlsx or CSV/text file → rows of strings.
+export async function readSpreadsheet(file) {
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.xls')) throw new Error('Old .xls files can’t be read. Open the file in Excel and save it as .xlsx (or CSV), then choose it again.');
+  const rows = name.endsWith('.xlsx') ? await readXlsx(file) : parseCsv(await file.text());
+  return rows.map((r) => Array.from(r, (c) => String(c ?? '')));
+}
 
 async function openZip(file) {
   const buf = await file.arrayBuffer();

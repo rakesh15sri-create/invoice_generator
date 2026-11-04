@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import {
-  CLOSED_STATUSES, CURRENCIES, LARGE_AMOUNT, METHODS, STATUS_BY_ID, isOpen, needsComment, nextStatus, ownerDept,
+  CLOSED_STATUSES, CURRENCIES, LARGE_AMOUNT, METHODS, STATUS_BY_ID, emailKey, isOpen, needsComment, nextStatus, ownerDept,
   statusLabel, statusPath,
 } from '../../src/crm/domain.js';
 import { requireRole } from '../auth.js';
-import { ah, clients, nextId, withdrawals } from '../db.js';
+import { ah, clients, nextId, nextIds, withdrawals } from '../db.js';
 import { emit } from './events.js';
 import { HttpError, actor, dateRange, out, pad, personName, str, toDate } from './util.js';
 
@@ -137,6 +137,75 @@ withdrawalsRouter.post('/', ah(async (req, res) => {
   await withdrawals.insertOne(row);
   await emit(req, 'withdrawal', 'upsert', row._id, `${req.user.name} added ${row.ref} · ${row.clientName}`);
   res.status(201).json(out(row));
+}));
+
+// Bulk import from the trading CRM's transactions export (the app reads the file and sends the rows).
+// Every imported request starts as Pending. The usual rules still apply: one open request per account
+// and confirmation for large amounts. ref (the export's transaction id) is stored so a transaction
+// is never imported twice. Rows linked to a client by e-mail when one matches.
+const IMPORT_MAX = 2000;
+const IMPORT_STATUS = 'pending';
+withdrawalsRouter.post('/import', ah(async (req, res) => {
+  const rows = Array.isArray(req.body?.rows) ? req.body.rows : null;
+  if (!rows?.length) throw new HttpError(400, 'There are no requests to import.');
+  if (rows.length > IMPORT_MAX) throw new HttpError(400, `Import up to ${IMPORT_MAX} requests at a time. Split the file and try again.`);
+  const confirmLarge = !!req.body.confirmLarge;
+
+  const items = rows.map((r) => ({
+    ref: str(r?.ref, 60) || null,
+    clientName: str(r?.clientName, 120),
+    emailLower: emailKey(r?.email),
+    accountNo: str(r?.accountNo, 40),
+    amount: Math.round(Number(r?.amount) * 100) / 100,
+    currency: CURRENCIES.includes(r?.currency) ? r.currency : 'USD',
+    method: METHODS.includes(r?.method) ? r.method : 'Other',
+    requestedAt: toDate(r?.requestedAt, null),
+    note: str(r?.note, 2000),
+  }));
+  const refs = items.map((i) => i.ref).filter(Boolean);
+  const accounts = [...new Set(items.map((i) => i.accountNo).filter(Boolean))];
+  const emails = [...new Set(items.map((i) => i.emailLower).filter(Boolean))];
+  const [done, open, linked] = await Promise.all([
+    withdrawals.find({ importRef: { $in: refs } }, { projection: { importRef: 1 } }).toArray(),
+    withdrawals.find({ accountNo: { $in: accounts }, status: { $nin: CLOSED_STATUSES } }, { projection: { accountNo: 1, ref: 1 } }).toArray(),
+    clients.find({ emailLower: { $in: emails } }, { projection: { emailLower: 1 } }).toArray(),
+  ]);
+  const seenRefs = new Set(done.map((w) => w.importRef));
+  const openBy = new Map(open.map((w) => [w.accountNo, w.ref]));
+  const clientBy = new Map(linked.map((c) => [c.emailLower, c._id]));
+
+  const skipped = [];
+  const accepted = [];
+  for (const i of items) {
+    const skip = (reason) => skipped.push({ ref: i.ref, clientName: i.clientName, reason });
+    if (i.ref && seenRefs.has(i.ref)) { skip('Already imported'); continue; }
+    if (!i.clientName) { skip('No client name'); continue; }
+    if (!i.accountNo) { skip('No account number'); continue; }
+    if (!(i.amount > 0) || i.amount > 1e12) { skip('No amount'); continue; }
+    if (i.amount >= LARGE_AMOUNT && !confirmLarge) { skip('Large amount not confirmed'); continue; }
+    if (openBy.has(i.accountNo)) { skip(`Account ${i.accountNo} already has an open request (${openBy.get(i.accountNo) || 'in this file'})`); continue; }
+    if (i.ref) seenRefs.add(i.ref);
+    openBy.set(i.accountNo, '');
+    accepted.push(i);
+  }
+
+  if (accepted.length) {
+    const now = new Date();
+    const first = await nextIds('withdrawals', accepted.length);
+    const docs = accepted.map(({ emailLower, ref, ...f }, n) => ({
+      _id: first + n,
+      ref: `WD-${now.getFullYear()}-${pad(first + n)}`,
+      clientId: clientBy.get(emailLower) ?? null, rmId: null, rmName: '', ...f,
+      requestedAt: f.requestedAt || now,
+      status: IMPORT_STATUS, department: ownerDept(IMPORT_STATUS), statusSince: now, closedAt: null,
+      history: [{ at: now, ...actor(req), type: 'created', to: IMPORT_STATUS, comment: f.note }],
+      ...(ref && { importRef: ref }),
+      createdBy: req.user.id, createdAt: now, updatedBy: req.user.id, updatedAt: now,
+    }));
+    await withdrawals.insertMany(docs);
+    await emit(req, 'withdrawal', 'reload', null, `${req.user.name} imported ${docs.length} withdrawal requests`);
+  }
+  res.status(201).json({ imported: accepted.length, skipped });
 }));
 
 // Edit fields and/or change status (with comment).

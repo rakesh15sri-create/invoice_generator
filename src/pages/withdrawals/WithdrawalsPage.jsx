@@ -10,6 +10,7 @@ import { storage } from '../../data.js';
 import { navigate } from '../../route.js';
 import Analytics from './Analytics.jsx';
 import Board from './Board.jsx';
+import ImportWithdrawalsDialog from './ImportWithdrawalsDialog.jsx';
 import WithdrawalDetail from './WithdrawalDetail.jsx';
 import WithdrawalForm from './WithdrawalForm.jsx';
 
@@ -34,6 +35,7 @@ export default function WithdrawalsPage({ user, param, query, search }) {
   const [filters, setFilters] = useState(NO_FILTERS);
   const [view, setViewState] = useState(() => storage.get('invgen.wdView', 'board'));
   const [editing, setEditing] = useState(null);
+  const [importing, setImporting] = useState(false);
   const now = useNow(30000);
   const toast = useToast();
   const confirm = useConfirm();
@@ -141,10 +143,13 @@ export default function WithdrawalsPage({ user, param, query, search }) {
           </label>
           {anyFilter && <button className="link" onClick={() => { setFilters(NO_FILTERS); setWRange({}); }}>Clear filters</button>}
         </div>
-        <div className="seg" role="group" aria-label="View">
-          {VIEWS.map((v) => (
-            <button key={v.id} className={view === v.id ? 'on' : ''} onClick={() => setView(v.id)}><Icon name={v.icon} size={15} />{v.label}</button>
-          ))}
+        <div className="row tight-row">
+          <button onClick={() => setImporting(true)} title="Create Pending requests from the transactions export (CSV or Excel)"><Icon name="upload" size={16} />Import</button>
+          <div className="seg" role="group" aria-label="View">
+            {VIEWS.map((v) => (
+              <button key={v.id} className={view === v.id ? 'on' : ''} onClick={() => setView(v.id)}><Icon name={v.icon} size={15} />{v.label}</button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -163,6 +168,7 @@ export default function WithdrawalsPage({ user, param, query, search }) {
       {param && !detail && <MissingDetail key={param} id={param} user={user} onClose={closeDetail} onEdit={setEditing} />}
       {showNew && <WithdrawalForm clientId={query.get('client')} onClose={() => navigate('#/withdrawals')} onSaved={(s) => setTimeout(() => navigate(`#/withdrawals/${s.id}`), 0)} />}
       {editing && <WithdrawalForm row={editing} onClose={() => setEditing(null)} />}
+      {importing && <ImportWithdrawalsDialog onClose={() => setImporting(false)} />}
     </div>
   );
 }
