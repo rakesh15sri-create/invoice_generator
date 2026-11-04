@@ -1,17 +1,19 @@
 import { Router } from 'express';
 import { ROLES, destroyUserSessions, hashPassword, publicUser } from './auth.js';
-import { ah, invoices, nextId, sessions, users } from './db.js';
+import { DEPARTMENTS } from '../src/crm/domain.js';
+import { ah, invoices, mails, nextId, sessions, users, withdrawals } from './db.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // partial: only validate the fields that were sent (used for updates).
-export function validateUserInput({ name, email, password, role }, { partial = false } = {}) {
+export function validateUserInput({ name, email, password, role, department }, { partial = false } = {}) {
   const check = (v) => !partial || v !== undefined;
   if (check(name) && !String(name ?? '').trim()) return 'Name is required.';
   if (check(email) && !EMAIL_RE.test(String(email ?? ''))) return 'Enter a valid email address.';
   if (!partial && !password) return 'Password is required.';
   if (password && String(password).length < 8) return 'Password must be at least 8 characters.';
   if (role !== undefined && !ROLES.includes(role)) return 'Invalid role.';
+  if (department && !DEPARTMENTS.includes(department)) return 'Invalid department.';
   return null;
 }
 
@@ -33,8 +35,8 @@ usersRouter.get('/', ah(async (req, res) => {
 }));
 
 usersRouter.post('/', ah(async (req, res) => {
-  const { name, email, password, role = 'staff' } = req.body || {};
-  const err = validateUserInput({ name, email, password, role });
+  const { name, email, password, role = 'staff', department = '' } = req.body || {};
+  const err = validateUserInput({ name, email, password, role, department });
   if (err) return res.status(400).json({ error: err });
   if (await emailTaken(email)) return res.status(409).json({ error: 'A user with this email already exists.' });
   const user = {
@@ -44,6 +46,7 @@ usersRouter.post('/', ah(async (req, res) => {
     emailLower: String(email).trim().toLowerCase(),
     passwordHash: hashPassword(password),
     role,
+    department,
     active: true,
     createdAt: new Date(),
   };
@@ -54,8 +57,8 @@ usersRouter.post('/', ah(async (req, res) => {
 usersRouter.put('/:id', ah(async (req, res) => {
   const target = await users.findOne({ _id: Number(req.params.id) });
   if (!target) return res.status(404).json({ error: 'User not found.' });
-  const { name, email, role, active, password } = req.body || {};
-  const err = validateUserInput({ name, email, password, role }, { partial: true });
+  const { name, email, role, active, password, department } = req.body || {};
+  const err = validateUserInput({ name, email, password, role, department }, { partial: true });
   if (err) return res.status(400).json({ error: err });
 
   const self = target._id === req.user.id;
@@ -70,7 +73,8 @@ usersRouter.put('/:id', ah(async (req, res) => {
   }
 
   const nextEmail = String(email ?? target.email).trim();
-  const changes = { name: String(name ?? target.name).trim(), email: nextEmail, emailLower: nextEmail.toLowerCase(), role: nextRole, active: nextActive };
+  const changes = { name: String(name ?? target.name).trim(), email: nextEmail, emailLower: nextEmail.toLowerCase(), role: nextRole, active: nextActive,
+    department: department === undefined ? target.department || '' : department };
   if (password) changes.passwordHash = hashPassword(password);
   await users.updateOne({ _id: target._id }, { $set: changes });
   // Disabling access or resetting the password signs that person out everywhere.
@@ -85,6 +89,8 @@ usersRouter.delete('/:id', ah(async (req, res) => {
   if (target._id === req.user.id) return res.status(400).json({ error: 'You cannot delete your own account.' });
   const n = await invoices.countDocuments({ createdBy: target._id });
   if (n > 0) return res.status(409).json({ error: `This member created ${n} invoice(s). Disable their access instead so the records keep their name.` });
+  const crm = (await withdrawals.countDocuments({ createdBy: target._id }, { limit: 1 })) + (await mails.countDocuments({ createdBy: target._id }, { limit: 1 }));
+  if (crm > 0) return res.status(409).json({ error: 'This member has withdrawal or mail records. Disable their access instead so the records keep their name.' });
   await users.deleteOne({ _id: target._id });
   await sessions.deleteMany({ userId: target._id });
   res.status(204).end();

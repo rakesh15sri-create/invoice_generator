@@ -141,10 +141,7 @@ function Closing({ inv }) {
           <Multiline text={inv.notes || inv.confirmText.replace(/\{service\}/g, inv.doc.service)} />
         </div>
       )}
-      <div className="sign">
-        <div className="thanks">{inv.footer}</div>
-        <div className="sig"><div className="line" />Authorised Signature</div>
-      </div>
+      
     </>
   );
 }

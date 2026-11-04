@@ -9,6 +9,8 @@ import {
 } from './auth.js';
 import { ah, connectDb, getSetting, invoices, nextId, setSetting, users } from './db.js';
 import { filesRouter, logoProxy } from './files.js';
+import { crmRouter } from './crm/index.js';
+import { HttpError } from './crm/util.js';
 import { StorageError } from './imagekit.js';
 import { invoicesRouter } from './invoices.js';
 import { statsRouter } from './stats.js';
@@ -129,6 +131,7 @@ app.use('/api/files', filesRouter);
 app.use('/api/invoices', invoicesRouter);
 app.use('/api/stats', requireRole('admin', 'manager'), statsRouter);
 app.use('/api/users', requireRole('admin'), usersRouter);
+app.use('/api', crmRouter); // withdrawals, clients, client mails
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found.' }));
 
@@ -140,13 +143,15 @@ app.use((err, req, res, next) => {
     }
     if (err.keyPattern?.emailLower) return res.status(409).json({ error: 'A user with this email already exists.' });
   }
+  if (err instanceof HttpError) return res.status(err.status).json({ error: err.message, ...err.extra });
   if (err instanceof StorageError) return res.status(err.status).json({ error: err.message });
+  if (err?.type === 'entity.parse.failed') return res.status(400).json({ error: 'The request could not be read. Please try again.' });
   if (err?.type === 'entity.too.large') {
     const mb = Math.round((err.limit / 1024 / 1024) * 10) / 10;
     return res.status(413).json({
       error: req.get('content-type') === 'application/octet-stream'
         ? `That file is too large. The limit is ${mb} MB.`
-        : 'Invoice is too large (try a smaller logo).',
+        : 'This is too large to save.',
     });
   }
   console.error(err);

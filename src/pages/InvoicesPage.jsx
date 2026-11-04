@@ -9,9 +9,9 @@ import { TEMPLATE_GROUPS, templateName } from '../templates/index.js';
 const STATUSES = ['Paid', 'Successful', 'Pending', 'Unpaid', 'Overdue', 'Cancelled'];
 const isSettled = (status) => ['paid', 'successful', 'cancelled'].includes(String(status).toLowerCase());
 
-export default function InvoicesPage({ user, query }) {
+export default function InvoicesPage({ user, query, search = '' }) {
   const [filters, setFilters] = useState({
-    q: '', template: query.get('template') || '', status: query.get('status') || '', member: query.get('member') || '',
+    template: query.get('template') || '', status: query.get('status') || '', member: query.get('member') || '',
   });
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -25,7 +25,7 @@ export default function InvoicesPage({ user, query }) {
   // (managers can't list users, so the member list comes from the invoices themselves).
   useEffect(() => {
     const params = new URLSearchParams();
-    if (filters.q) params.set('q', filters.q);
+    if (search.trim()) params.set('q', search.trim());
     if (filters.template) params.set('template', filters.template);
     if (filters.status) params.set('status', filters.status);
     const t = setTimeout(() => {
@@ -34,9 +34,9 @@ export default function InvoicesPage({ user, query }) {
         .then((r) => { setRows(r); setError(''); })
         .catch((e) => setError(e.message))
         .finally(() => setLoading(false));
-    }, filters.q ? 250 : 0);
+    }, search ? 250 : 0);
     return () => clearTimeout(t);
-  }, [filters.q, filters.template, filters.status]);
+  }, [search, filters.template, filters.status]);
 
   const members = useMemo(() => {
     const m = new Map();
@@ -89,13 +89,7 @@ export default function InvoicesPage({ user, query }) {
 
   return (
     <div className="page">
-      <div className="page-head">
-        <h2>{all ? 'All invoices' : 'My invoices'}</h2>
-        <a className="btn primary" href="#/editor">+ Create invoice</a>
-      </div>
-
       <div className="filters">
-        <input type="search" placeholder="Search number or customer…" value={filters.q} onChange={set('q')} />
         <select value={filters.template} onChange={set('template')}>
           <option value="">All categories</option>
           {TEMPLATE_GROUPS.map((g) => (
@@ -119,7 +113,7 @@ export default function InvoicesPage({ user, query }) {
       {error && <div className="form-error">{error}</div>}
 
       <div className="summary-line">
-        {loading ? 'Loading…' : `${visible.length} invoice${visible.length === 1 ? '' : 's'}`}        {!loading && totalsByCurrency.map(([cur, total]) => <span key={cur}> · {fmtAmount(total, cur)}</span>)}
+        {loading ? 'Loading…' : `${visible.length} ${all ? '' : 'of my '}invoice${visible.length === 1 ? '' : 's'}`}        {!loading && totalsByCurrency.map(([cur, total]) => <span key={cur}> · {fmtAmount(total, cur)}</span>)}
       </div>
 
       <div className="table-wrap">
@@ -163,8 +157,8 @@ export default function InvoicesPage({ user, query }) {
             {!loading && visible.length === 0 && (
               <tr>
                 <td colSpan={all ? 8 : 7} className="empty-cell">
-                  {Object.values(filters).some(Boolean) ? (
-                    <>No invoices match these filters. <button className="link" onClick={() => setFilters({ q: '', template: '', status: '', member: '' })}>Clear filters</button></>
+                  {Object.values(filters).some(Boolean) || search ? (
+                    <>No invoices match these filters. <button className="link" onClick={() => setFilters({ template: '', status: '', member: '' })}>Clear filters</button></>
                   ) : (
                     <>No invoices yet. <a href="#/editor">Create your first invoice</a></>
                   )}
