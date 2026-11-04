@@ -211,7 +211,6 @@ export default function DashboardPage({ user }) {
               {stats.currencies.map((c) => <option key={c.currency} value={c.currency}>{c.currency}</option>)}
             </select>
           )}
-          <a className="btn primary" href="#/editor">+ New invoice</a>
         </div>
       </div>
 

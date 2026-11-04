@@ -39,7 +39,6 @@ export default function CompanyPage() {
 
   return (
     <div className="page narrow">
-      <div className="page-head"><h2>Company details</h2></div>
       <p className="muted">
         Enter your business details once. Every new invoice — created by you or your team — will start with them.
         Invoices that already exist are not changed.

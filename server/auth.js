@@ -38,7 +38,9 @@ export async function destroyUserSessions(userId, exceptToken) {
   await sessions.deleteMany(filter);
 }
 
-export const publicUser = (u) => ({ id: u._id, name: u.name, email: u.email, role: u.role, active: !!u.active, createdAt: u.createdAt });
+export const publicUser = (u) => ({
+  id: u._id, name: u.name, email: u.email, role: u.role, department: u.department || '', active: !!u.active, createdAt: u.createdAt,
+});
 
 export const requireAuth = ah(async (req, res, next) => {
   const m = /^Bearer ([a-f0-9]{64})$/.exec(req.get('authorization') || '');

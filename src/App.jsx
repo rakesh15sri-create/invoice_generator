@@ -7,18 +7,13 @@ import EditorPage, { clearDrafts } from './pages/EditorPage.jsx';
 import InvoicesPage from './pages/InvoicesPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import TeamPage from './pages/TeamPage.jsx';
+import ClientsPage from './pages/clients/ClientsPage.jsx';
+import MailsPage from './pages/mails/MailsPage.jsx';
+import WithdrawalsPage from './pages/withdrawals/WithdrawalsPage.jsx';
+import Shell, { allowedPages } from './components/Shell.jsx';
 import { FeedbackProvider, Loading } from './components/ui.jsx';
-import { ROLE_LABEL } from './roles.js';
+import { CrmProvider } from './crm/store.jsx';
 import { useHashRoute } from './route.js';
-
-// Which pages each role can open. The server enforces the same rules on its API.
-const NAV = [
-  { page: 'dashboard', label: 'Dashboard', roles: ['admin', 'manager'] },
-  { page: 'invoices', label: 'Invoices', roles: ['admin', 'manager', 'staff'] },
-  { page: 'editor', label: 'Create / Edit', roles: ['admin', 'manager', 'staff'] },
-  { page: 'team', label: 'Team', roles: ['admin'] },
-  { page: 'company', label: 'Company', roles: ['admin'] },
-];
 
 export default function App() {
   return <FeedbackProvider><Root /></FeedbackProvider>;
@@ -66,47 +61,30 @@ function Root() {
     setAuth({ loading: false, user: null, needsSetup: false, error: '' });
   };
 
-  return <Shell user={auth.user} onLogout={logout} />;
+  return <Main user={auth.user} onLogout={logout} />;
 }
 
-function Shell({ user, onLogout }) {
+function Main({ user, onLogout }) {
   const route = useHashRoute();
-  const allowed = NAV.filter((n) => n.roles.includes(user.role));
+  const allowed = allowedPages(user);
   const home = allowed[0].page;
-  const page = route.page === 'account' || allowed.some((n) => n.page === route.page) ? route.page : home;
+  const page = allowed.some((n) => n.page === route.page) ? route.page : home;
+  const [search, setSearch] = useState('');
+  useEffect(() => { setSearch(''); }, [page]);
 
   return (
-    <div className="app">
-      <header className="topbar">
-        <a className="brand" href={`#/${home}`}>
-          <span className="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M6 2h9l5 5v15H6z" /><path d="M15 2v5h5" /><path d="M9 12h7M9 16h7M9 8h3" />
-            </svg>
-          </span>
-          Invoice Generator
-        </a>
-        <nav className="nav">
-          {allowed.map((n) => (
-            <a key={n.page} href={`#/${n.page}`} className={page === n.page ? 'active' : ''}>{n.label}</a>
-          ))}
-        </nav>
-        <div className="user-box">
-          <a href="#/account" className={page === 'account' ? 'active' : ''} title="My account">
-            {user.name} <span className={`role-badge r-${user.role}`}>{ROLE_LABEL[user.role]}</span>
-          </a>
-          <button className="ghost" onClick={onLogout}>Sign out</button>
-        </div>
-      </header>
-
-      <div className="page-body">
+    <CrmProvider user={user}>
+      <Shell user={user} page={page} onLogout={onLogout} search={search} setSearch={setSearch}>
         {page === 'dashboard' && <DashboardPage user={user} />}
         {page === 'company' && <CompanyPage />}
-        {page === 'invoices' && <InvoicesPage key={route.query.toString()} user={user} query={route.query} />}
+        {page === 'invoices' && <InvoicesPage key={route.query.toString()} user={user} query={route.query} search={search} />}
         {page === 'editor' && <EditorPage user={user} invoiceId={route.param} query={route.query} />}
         {page === 'team' && <TeamPage user={user} />}
         {page === 'account' && <AccountPage user={user} />}
-      </div>
-    </div>
+        {page === 'withdrawals' && <WithdrawalsPage user={user} param={route.param} query={route.query} search={search} />}
+        {page === 'clients' && <ClientsPage user={user} param={route.param} query={route.query} search={search} />}
+        {page === 'mails' && <MailsPage user={user} param={route.param} query={route.query} search={search} />}
+      </Shell>
+    </CrmProvider>
   );
 }

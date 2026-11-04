@@ -12,6 +12,14 @@ import { MongoClient } from 'mongodb';
 //               — summary fields are derived from "data" on every save so lists and stats stay fast
 //   settings  { _id: key, value }
 //   counters  { _id: name, seq }
+// Withdrawal CRM (see server/crm/):
+//   withdrawals { _id, ref, clientId, clientName, accountNo, amount, currency, method, rmId, rmName, note,
+//                 requestedAt, status, department, statusSince, closedAt, history[], createdBy, ... }
+//   clients     { _id, name, email, emailLower, phone, phoneKey, country, accountNo, rmId, rmName, notes,
+//                 source, importBatch, backfilled, ... }
+//   mails       { _id, ticket, clientId, clientName, clientEmail, subject, issueType, relatedIssues[], priority,
+//                 mailbox, cc, status, department, replyPending, mailNo, followUps, thread[], files[], ... }
+//   crm_events  { _id: seq, at, kind, action, id, by, byName, origin, text } — the live-update feed
 export const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017';
 export const MONGODB_DB = process.env.MONGODB_DB || 'invoice_generator';
 
@@ -23,6 +31,10 @@ export const sessions = db.collection('sessions');
 export const invoices = db.collection('invoices');
 export const settings = db.collection('settings');
 export const counters = db.collection('counters');
+export const withdrawals = db.collection('withdrawals');
+export const clients = db.collection('clients');
+export const mails = db.collection('mails');
+export const crmEvents = db.collection('crm_events');
 
 // Connects and makes sure the indexes exist. Call once at startup.
 export async function connectDb() {
@@ -44,6 +56,17 @@ export async function connectDb() {
     invoices.createIndex({ template: 1 }),
     invoices.createIndex({ createdBy: 1 }),
     invoices.createIndex({ docDate: -1, _id: -1 }),
+    withdrawals.createIndex({ status: 1 }),
+    withdrawals.createIndex({ accountNo: 1, status: 1 }),
+    withdrawals.createIndex({ requestedAt: -1 }),
+    withdrawals.createIndex({ clientId: 1 }),
+    clients.createIndex({ name: 1 }),
+    clients.createIndex({ importBatch: 1 }),
+    mails.createIndex({ status: 1 }),
+    mails.createIndex({ createdAt: -1 }),
+    mails.createIndex({ clientId: 1 }),
+    mails.createIndex({ clientEmailLower: 1 }),
+    crmEvents.createIndex({ at: 1 }, { expireAfterSeconds: 2 * 24 * 3600 }),
   ]);
 }
 

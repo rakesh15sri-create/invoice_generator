@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { Loading, useConfirm, useToast } from '../components/ui.jsx';
+import { DEPARTMENTS } from '../crm/domain.js';
 import { ROLE_HELP, ROLE_LABEL } from '../roles.js';
 
 // Readable temporary password (no look-alike characters).
@@ -10,7 +11,7 @@ function tempPassword() {
   return Array.from(bytes, (b) => chars[b % chars.length]).join('');
 }
 
-const blank = () => ({ name: '', email: '', password: tempPassword(), role: 'staff' });
+const blank = () => ({ name: '', email: '', password: tempPassword(), role: 'staff', department: '' });
 
 export default function TeamPage({ user }) {
   const [users, setUsers] = useState(null);
@@ -107,8 +108,6 @@ export default function TeamPage({ user }) {
 
   return (
     <div className="page">
-      <div className="page-head"><h2>Team access</h2></div>
-
       <div className="roles-help">
         {Object.keys(ROLE_LABEL).map((r) => (
           <div key={r}><span className={`role-badge r-${r}`}>{ROLE_LABEL[r]}</span> {ROLE_HELP[r]}</div>
@@ -148,6 +147,13 @@ export default function TeamPage({ user }) {
               {Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </label>
+          <label className="field">
+            <span>Department (CRM)</span>
+            <select value={form.department} onChange={set('department')}>
+              <option value="">—</option>
+              {DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
+            </select>
+          </label>
           <button className="primary" disabled={busy}>{busy ? 'Adding…' : 'Give access'}</button>
         </div>
         {error && <div className="form-error">{error}</div>}
@@ -155,7 +161,7 @@ export default function TeamPage({ user }) {
 
       <div className="table-wrap">
         <table className="data-table">
-          <thead><tr><th>Member</th><th>Access</th><th>Status</th><th className="r">Invoices</th><th /></tr></thead>
+          <thead><tr><th>Member</th><th>Access</th><th>Department</th><th>Status</th><th className="r">Invoices</th><th /></tr></thead>
           <tbody>
             {users.map((u) => {
               const self = u.id === user.id;
@@ -166,6 +172,12 @@ export default function TeamPage({ user }) {
                     <select value={u.role} disabled={self} title={self ? 'You can’t change your own access' : undefined}
                       onChange={(e) => update(u, { role: e.target.value }, `${u.name} is now ${ROLE_LABEL[e.target.value]}.`)}>
                       {Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    </select>
+                  </td>
+                  <td>
+                    <select value={u.department || ''} onChange={(e) => update(u, { department: e.target.value }, `${u.name} is now in ${e.target.value || 'no department'}.`)}>
+                      <option value="">—</option>
+                      {DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
                     </select>
                   </td>
                   <td>

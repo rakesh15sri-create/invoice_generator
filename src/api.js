@@ -6,6 +6,9 @@ export const getToken = () => storage.get(TOKEN_KEY, null);
 export const setToken = (t) => storage.set(TOKEN_KEY, t);
 export const clearToken = () => { try { localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ } };
 
+// Identifies this browser tab, so the live-update feed can skip changes this tab made itself.
+export const CLIENT_ID = Math.random().toString(36).slice(2, 12);
+
 let onUnauthorized = () => {};
 export const setUnauthorizedHandler = (fn) => { onUnauthorized = fn; };
 
@@ -26,6 +29,7 @@ export function upload(path, file, name = file.name) {
 async function request(path, method, headers, body) {
   const token = getToken();
   if (token) headers.authorization = `Bearer ${token}`;
+  headers['x-client-id'] = CLIENT_ID;
 
   let res;
   try {
@@ -39,6 +43,7 @@ async function request(path, method, headers, body) {
     if (res.status === 401 && token) onUnauthorized();
     const err = new Error(data.error || 'Something went wrong. Please try again in a moment.');
     err.status = res.status;
+    err.data = data;
     throw err;
   }
   return data;
@@ -46,11 +51,11 @@ async function request(path, method, headers, body) {
 
 // Ask the server for a short-lived link to a stored file, then open it in a new tab.
 // The tab is opened first (synchronously) so popup blockers allow it.
-export async function openStoredFile(invoiceId, fileId) {
+export async function openStoredFile(invoiceId, fileId, base = '/invoices') {
   const tab = window.open('', '_blank');
   if (tab) tab.opener = null;
   try {
-    const { url } = await api(`/invoices/${invoiceId}/files/${encodeURIComponent(fileId)}/url`);
+    const { url } = await api(`${base}/${invoiceId}/files/${encodeURIComponent(fileId)}/url`);
     if (tab) tab.location.href = url;
     else window.location.href = url;
   } catch (e) {

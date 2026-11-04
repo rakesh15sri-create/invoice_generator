@@ -27,12 +27,12 @@ export default function AccountPage({ user }) {
 
   return (
     <div className="page narrow">
-      <div className="page-head"><h2>My account</h2></div>
       <section className="panel">
         <div className="kv-list">
           <div><span>Name</span><b>{user.name}</b></div>
           <div><span>Email</span><b>{user.email}</b></div>
           <div><span>Access</span><b>{ROLE_LABEL[user.role]}</b></div>
+          <div><span>Department</span><b>{user.department || '—'}</b></div>
         </div>
         <p className="muted small">{ROLE_HELP[user.role]}</p>
       </section>
