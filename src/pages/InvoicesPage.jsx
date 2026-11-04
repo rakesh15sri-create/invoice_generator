@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, openStoredFile } from '../api.js';
-import { StatusBadge, fmtAmount, useConfirm, useToast } from '../components/ui.jsx';
+import { Icon, StatusBadge, fmtAmount, useConfirm, useToast } from '../components/ui.jsx';
 import { fmtDate } from '../data.js';
 import { canSeeAll } from '../roles.js';
 import { navigate } from '../route.js';
 import { TEMPLATE_GROUPS, templateName } from '../templates/index.js';
+import ImportInvoicesDialog from './ImportInvoicesDialog.jsx';
 
 const STATUSES = ['Paid', 'Successful', 'Pending', 'Unpaid', 'Overdue', 'Cancelled'];
 const isSettled = (status) => ['paid', 'successful', 'cancelled'].includes(String(status).toLowerCase());
@@ -17,6 +18,8 @@ export default function InvoicesPage({ user, query, search = '' }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [working, setWorking] = useState(null); // id of the row being updated
+  const [importing, setImporting] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0); // bumped after an import to refetch the list
   const toast = useToast();
   const confirm = useConfirm();
   const all = canSeeAll(user);
@@ -36,7 +39,7 @@ export default function InvoicesPage({ user, query, search = '' }) {
         .finally(() => setLoading(false));
     }, search ? 250 : 0);
     return () => clearTimeout(t);
-  }, [search, filters.template, filters.status]);
+  }, [search, filters.template, filters.status, reloadKey]);
 
   const members = useMemo(() => {
     const m = new Map();
@@ -89,26 +92,32 @@ export default function InvoicesPage({ user, query, search = '' }) {
 
   return (
     <div className="page">
-      <div className="filters">
-        <select value={filters.template} onChange={set('template')}>
-          <option value="">All categories</option>
-          {TEMPLATE_GROUPS.map((g) => (
-            <optgroup key={g.name} label={g.name}>
-              {g.items.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </optgroup>
-          ))}
-        </select>
-        <select value={filters.status} onChange={set('status')}>
-          <option value="">All statuses</option>
-          {STATUSES.map((s) => <option key={s}>{s}</option>)}
-        </select>
-        {all && (
-          <select value={filters.member} onChange={set('member')}>
-            <option value="">All team members</option>
-            {members.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+      <div className="toolbar-row">
+        <div className="filters">
+          <select value={filters.template} onChange={set('template')}>
+            <option value="">All categories</option>
+            {TEMPLATE_GROUPS.map((g) => (
+              <optgroup key={g.name} label={g.name}>
+                {g.items.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </optgroup>
+            ))}
           </select>
-        )}
+          <select value={filters.status} onChange={set('status')}>
+            <option value="">All statuses</option>
+            {STATUSES.map((s) => <option key={s}>{s}</option>)}
+          </select>
+          {all && (
+            <select value={filters.member} onChange={set('member')}>
+              <option value="">All team members</option>
+              {members.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+            </select>
+          )}
+        </div>
+        <div className="row tight-row">
+          <button onClick={() => setImporting(true)} title="Create paid invoices from a payment gateway report (Excel or CSV)"><Icon name="upload" size={16} />Import payments</button>
+        </div>
       </div>
+      {importing && <ImportInvoicesDialog onClose={() => setImporting(false)} onDone={() => setReloadKey((k) => k + 1)} />}
 
       {error && <div className="form-error">{error}</div>}
 

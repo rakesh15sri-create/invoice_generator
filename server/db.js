@@ -8,7 +8,8 @@ import { MongoClient } from 'mongodb';
 //   users     { _id, name, email, emailLower, passwordHash, role, active, createdAt }
 //   sessions  { _id: sha256(token), userId, expiresAt }      — expired ones removed by a TTL index
 //   invoices  { _id, number, template, customerName, currency, total, paid, status, statusLower,
-//               docDate, data, createdBy, updatedBy, createdAt, updatedAt }
+//               docDate, data, importRef?, createdBy, updatedBy, createdAt, updatedAt }
+//               — importRef: the payment gateway's order id, for invoices made by "Import payments"
 //               — summary fields are derived from "data" on every save so lists and stats stay fast
 //   settings  { _id: key, value }
 //   counters  { _id: name, seq }
@@ -56,6 +57,7 @@ export async function connectDb() {
     invoices.createIndex({ template: 1 }),
     invoices.createIndex({ createdBy: 1 }),
     invoices.createIndex({ docDate: -1, _id: -1 }),
+    invoices.createIndex({ importRef: 1 }, { sparse: true }),
     withdrawals.createIndex({ status: 1 }),
     withdrawals.createIndex({ accountNo: 1, status: 1 }),
     withdrawals.createIndex({ requestedAt: -1 }),
@@ -74,6 +76,12 @@ export async function connectDb() {
 export async function nextId(name) {
   const doc = await counters.findOneAndUpdate({ _id: name }, { $inc: { seq: 1 } }, { upsert: true, returnDocument: 'after' });
   return doc.seq;
+}
+
+// Reserve n consecutive ids in one step; returns the first of them.
+export async function nextIds(name, n) {
+  const doc = await counters.findOneAndUpdate({ _id: name }, { $inc: { seq: n } }, { upsert: true, returnDocument: 'after' });
+  return doc.seq - n + 1;
 }
 
 export async function getSetting(key, fallback = null) {
