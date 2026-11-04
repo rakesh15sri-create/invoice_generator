@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { isPaid, num, pad, totals } from '../src/data.js';
+import { defaults, isPaid, num, pad, totals } from '../src/data.js';
 import { requireRole } from './auth.js';
-import { ah, invoices, nextId, settings, users } from './db.js';
+import { ah, getSetting, invoices, nextId, nextIds, settings, users } from './db.js';
 import { UPLOAD_LIMIT_MB, fileMeta, rawBody } from './files.js';
 import { deleteFile, signedUrl, uploadFile } from './imagekit.js';
 
@@ -106,18 +106,80 @@ invoicesRouter.get('/', ah(async (req, res) => {
   })));
 }));
 
-// Reserve the next free invoice number (shared across the whole team). Each $inc is atomic,
+// Reserve the next `count` free invoice numbers (shared across the whole team). Each $inc is atomic,
 // so two people asking at the same moment always get different numbers.
-invoicesRouter.post('/next-number', ah(async (req, res) => {
+async function reserveNumbers(count) {
   const year = new Date().getFullYear();
-  let candidate;
-  do {
+  const out = [];
+  while (out.length < count) {
+    const want = count - out.length;
     const { value } = await settings.findOneAndUpdate(
-      { _id: 'invoice_counter' }, { $inc: { value: 1 } }, { upsert: true, returnDocument: 'after' },
+      { _id: 'invoice_counter' }, { $inc: { value: want } }, { upsert: true, returnDocument: 'after' },
     );
-    candidate = `INV-${year}-${pad(value, 4)}`;
-  } while (await invoices.countDocuments({ number: candidate }, { limit: 1 }));
-  res.json({ number: candidate });
+    const batch = Array.from({ length: want }, (_, i) => `INV-${year}-${pad(value - want + 1 + i, 4)}`);
+    const taken = new Set((await invoices.find({ number: { $in: batch } }, { projection: { number: 1 } }).toArray()).map((r) => r.number));
+    out.push(...batch.filter((n) => !taken.has(n)));
+  }
+  return out;
+}
+
+invoicesRouter.post('/next-number', ah(async (req, res) => {
+  const [number] = await reserveNumbers(1);
+  res.json({ number });
+}));
+
+// Bulk create from an imported payment report: { invoices: [{ ref, data }] }. A blank invoice number
+// gets the next one in sequence. ref (the gateway's order id) is stored, so importing the same
+// report again skips payments that already have an invoice.
+const IMPORT_MAX = 500;
+invoicesRouter.post('/import', ah(async (req, res) => {
+  const list = req.body?.invoices;
+  if (!Array.isArray(list) || !list.length) return res.status(400).json({ error: 'There is nothing to import.' });
+  if (list.length > IMPORT_MAX) return res.status(400).json({ error: `Import up to ${IMPORT_MAX} payments at a time. Split the file and try again.` });
+
+  const refOf = (e) => String(e?.ref || '').trim() || null;
+  const numberOf = (e) => String(e?.data?.doc?.number || '').trim();
+  const refs = list.map(refOf).filter(Boolean);
+  const numbers = list.map(numberOf).filter(Boolean);
+  const [doneRefs, usedNumbers, company] = await Promise.all([
+    invoices.find({ importRef: { $in: refs } }, { projection: { importRef: 1 } }).toArray(),
+    invoices.find({ number: { $in: numbers } }, { projection: { number: 1 } }).toArray(),
+    getSetting('company', null),
+  ]);
+  const seenRefs = new Set(doneRefs.map((r) => r.importRef));
+  const seenNumbers = new Set(usedNumbers.map((r) => r.number));
+
+  const skipped = [];
+  const accepted = [];
+  for (const e of list) {
+    const ref = refOf(e);
+    const number = numberOf(e);
+    if (ref && seenRefs.has(ref)) { skipped.push({ ref, reason: 'Already imported' }); continue; }
+    if (number && seenNumbers.has(number)) { skipped.push({ ref, reason: `Invoice number ${number} is already used` }); continue; }
+    const err = validate(number ? e.data : { ...e?.data, doc: { ...e?.data?.doc, number: 'pending' } });
+    if (err) { skipped.push({ ref, reason: err }); continue; }
+    if (ref) seenRefs.add(ref);
+    if (number) seenNumbers.add(number);
+    // The browser leaves out the company (its logo can be large); every invoice gets the team's.
+    accepted.push({ ref, data: { ...e.data, company: e.data.company || company || defaults().company } });
+  }
+
+  const blanks = accepted.filter((e) => !numberOf(e));
+  const fresh = blanks.length ? await reserveNumbers(blanks.length) : [];
+  blanks.forEach((e, i) => { e.data.doc.number = fresh[i]; });
+
+  const created = [];
+  if (accepted.length) {
+    const now = new Date();
+    const firstId = await nextIds('invoices', accepted.length);
+    const docs = accepted.map(({ ref, data }, i) => ({
+      _id: firstId + i, ...summarize(data), data, ...(ref && { importRef: ref }),
+      createdBy: req.user.id, updatedBy: req.user.id, createdAt: now, updatedAt: now,
+    }));
+    await invoices.insertMany(docs);
+    created.push(...docs.map((d) => ({ id: d._id, number: d.number, ref: d.importRef ?? null })));
+  }
+  res.status(201).json({ created, skipped });
 }));
 
 invoicesRouter.get('/:id', ah(async (req, res) => {
